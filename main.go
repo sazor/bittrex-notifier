@@ -15,8 +15,8 @@ import (
 	"time"
 
 	"github.com/deckarep/gosx-notifier"
+	"github.com/sazor/daemon"
 	"github.com/shopspring/decimal"
-	"github.com/takama/daemon"
 	bittrex "github.com/toorop/go-bittrex"
 	chart "github.com/wcharczuk/go-chart"
 	"github.com/wcharczuk/go-chart/drawing"
@@ -56,18 +56,18 @@ func (service *Service) Manage() (string, error) {
 			return usage, nil
 		}
 	}
-	// Set up channel on which to send signal notifications.
-	// We must use a buffered channel or risk missing the signal
-	// if we're not ready to receive when the signal is sent.
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, os.Interrupt, os.Kill, syscall.SIGTERM)
-	tickChan := time.NewTicker(time.Minute * 3).C
+	tickChan := time.NewTicker(time.Minute * 1).C
+	showPumpDumps()
 	for {
 		select {
 		case <-tickChan:
 			showPumpDumps()
 		case <-interrupt:
+			return "Service exited", nil
 			break
+		default:
 		}
 	}
 	return "Service exited", nil
@@ -93,10 +93,10 @@ func notify(market bittrex.MarketSummary, wg *sync.WaitGroup) {
 		defer os.Remove(chart)
 	}
 	note.ContentImage = chart
-
 	err := note.Push()
 	if err != nil {
-		log.Fatal(err)
+		log.Println("smth")
+		log.Println(err)
 	}
 	wg.Done()
 }
@@ -141,7 +141,8 @@ func filterAltcoins(markets []bittrex.MarketSummary) []bittrex.MarketSummary {
 	return filtered
 }
 
-func downloadLogo(market bittrex.Market) {
+func downloadLogo(market bittrex.Market, wg sync.WaitGroup) {
+	defer wg.Done()
 	response, err := http.Get(market.LogoUrl)
 	if err != nil {
 		return
@@ -172,15 +173,18 @@ func loadLogos() {
 		return
 	}
 	log.Println("Downloading logos...")
+	var wg sync.WaitGroup
+	wg.Add(len(markets))
 	for _, market := range markets {
-		downloadLogo(market)
+		go downloadLogo(market, wg)
 	}
+	wg.Wait()
 }
 
 func downloadChart(market string) string {
 	ticks, err := client.GetTicks(market, "thirtyMin")
 	if err != nil {
-		log.Fatal(err)
+		log.Println(err)
 		return ""
 	}
 	var y []float64
@@ -205,14 +209,14 @@ func downloadChart(market string) string {
 	}
 	file, err := ioutil.TempFile("", market)
 	if err != nil {
-		log.Fatal(err)
+		log.Println(err)
 		return ""
 	}
 	defer file.Close()
 	err = graph.Render(chart.PNG, file)
 	if err != nil {
 		os.Remove(file.Name())
-		log.Fatal(err)
+		log.Println(err)
 		return ""
 	}
 	return file.Name()
@@ -221,7 +225,7 @@ func downloadChart(market string) string {
 func showPumpDumps() {
 	marketsSum, err := client.GetMarketSummaries()
 	if err != nil {
-		fmt.Println(err)
+		log.Println(err)
 		os.Exit(1)
 	}
 	altcoins := filterVolume(filterAltcoins(marketsSum))
@@ -248,5 +252,4 @@ func main() {
 		os.Exit(1)
 	}
 	fmt.Println(status)
-
 }
