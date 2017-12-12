@@ -7,12 +7,16 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
+	"time"
 
 	"github.com/deckarep/gosx-notifier"
 	"github.com/shopspring/decimal"
+	"github.com/takama/daemon"
 	bittrex "github.com/toorop/go-bittrex"
 	chart "github.com/wcharczuk/go-chart"
 	"github.com/wcharczuk/go-chart/drawing"
@@ -23,7 +27,51 @@ const (
 	pumpThreshold    = 1.75
 	dumpThreshold    = 0.75
 	bittrexMarketUrl = "https://bittrex.com/Market/Index?MarketName="
+	name             = "bittrex_notifier"
+	description      = "OS X Notification of pump & dumps on Bittrex"
 )
+
+type Service struct {
+	daemon.Daemon
+}
+
+func (service *Service) Manage() (string, error) {
+
+	usage := "Usage: bittrex_notifier install | remove | start | stop | status"
+	// If received any kind of command, do it
+	if len(os.Args) > 1 {
+		command := os.Args[1]
+		switch command {
+		case "install":
+			return service.Install()
+		case "remove":
+			return service.Remove()
+		case "start":
+			return service.Start()
+		case "stop":
+			return service.Stop()
+		case "status":
+			return service.Status()
+		default:
+			return usage, nil
+		}
+	}
+	// Set up channel on which to send signal notifications.
+	// We must use a buffered channel or risk missing the signal
+	// if we're not ready to receive when the signal is sent.
+	interrupt := make(chan os.Signal, 1)
+	signal.Notify(interrupt, os.Interrupt, os.Kill, syscall.SIGTERM)
+	tickChan := time.NewTicker(time.Minute * 3).C
+	for {
+		select {
+		case <-tickChan:
+			showPumpDumps()
+		case <-interrupt:
+			break
+		}
+	}
+	return "Service exited", nil
+}
 
 var client = bittrex.New("", "")
 var logoDir = filepath.Join(os.TempDir(), "bittrex_logos")
@@ -170,8 +218,7 @@ func downloadChart(market string) string {
 	return file.Name()
 }
 
-func main() {
-	loadLogos()
+func showPumpDumps() {
 	marketsSum, err := client.GetMarketSummaries()
 	if err != nil {
 		fmt.Println(err)
@@ -186,4 +233,20 @@ func main() {
 		go notify(market, &wg)
 	}
 	wg.Wait()
+}
+func main() {
+	loadLogos()
+	srv, err := daemon.New(name, description)
+	if err != nil {
+		log.Println("Error: ", err)
+		os.Exit(1)
+	}
+	service := &Service{srv}
+	status, err := service.Manage()
+	if err != nil {
+		log.Println(status, "\nError: ", err)
+		os.Exit(1)
+	}
+	fmt.Println(status)
+
 }

@@ -26,16 +26,16 @@
   version = "v1.2.0"
 
 [[projects]]
-  name = "github.com/rakyll/statik"
-  packages = ["."]
-  revision = "fd36b3595eb2ec8da4b8153b107f7ea08504899d"
-  version = "v0.1.1"
-
-[[projects]]
   branch = "master"
   name = "github.com/shopspring/decimal"
   packages = ["."]
   revision = "9ca7f51822d222ae4e246f070f9aad863599bd1a"
+
+[[projects]]
+  name = "github.com/takama/daemon"
+  packages = ["."]
+  revision = "f30a97dd1445619884e03e7ed088bc1b3c4f767e"
+  version = "0.9.3"
 
 [[projects]]
   branch = "master"
@@ -64,6 +64,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "1fd59e9fbfe77876eeb9360ae759618b36746b148fd5141c3d4267c68e1b5842"
+  inputs-digest = "975b2427e5b053f8b81bc20b8593a207b2aa1094250a064b3fed476f4ed15a9a"
   solver-name = "gps-cdcl"
   solver-version = 1
